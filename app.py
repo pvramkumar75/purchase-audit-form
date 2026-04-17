@@ -29,37 +29,37 @@ class SpecialNotePDF(FPDF):
 st.set_page_config(page_title="Special Note Builder", page_icon="📝")
 
 st.title("🛡️ Procurement Special Note")
-st.info("Complete this form to generate the audit document for AI validation.")
+st.info("The variance calculates automatically as you type. All data will be captured in the final PDF.")
 
-# --- FORM ---
-with st.form("special_note_form"):
-    # 1. Price Analysis & Currency
-    st.subheader("1. Price Analysis")
-    
-    currency = st.selectbox("Select Currency", ["INR", "USD", "GBP", "EUR", "CNY"])
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        # 'label_visibility' hidden removes the label but keeps accessibility
-        # 'step=None' or leaving it out removes the +/- buttons in some browsers
-        lpp = st.number_input(f"Last Purchase Price ({currency})", min_value=0.0, format="%.2f")
-    with col2:
-        lpp_date = st.date_input("LPP Date", value=date.today())
-    with col3:
-        curr_price = st.number_input(f"Current Price ({currency})", min_value=0.0, format="%.2f")
+# --- 1. PRICE ANALYSIS (Live Update Section) ---
+st.subheader("1. Price Analysis")
+currency = st.selectbox("Select Currency", ["INR", "USD", "GBP", "EUR", "CNY"])
 
-    # Auto-calculate variance
-    variance = 0.0
-    if lpp > 0:
-        variance = ((curr_price - lpp) / lpp) * 100
-    
-    st.write(f"**Calculated Variance:** {variance:.2f}%")
-    if variance > 10:
-        st.error(f"⚠️ High Variance detected: {variance:.2f}%")
-    elif variance > 0:
-        st.warning(f"Price Increase: {variance:.2f}%")
+col1, col2, col3 = st.columns(3)
+with col1:
+    # step=0.0 and format="%.2f" removes the spinner buttons
+    lpp = st.number_input(f"Last Purchase Price ({currency})", min_value=0.0, step=0.0, format="%.2f", key="lpp_input")
+with col2:
+    lpp_date = st.date_input("LPP Date", value=date.today(), key="lpp_date_input")
+with col3:
+    curr_price = st.number_input(f"Current Price ({currency})", min_value=0.0, step=0.0, format="%.2f", key="curr_price_input")
 
-    # 2. Justifications
+# --- REAL-TIME CALCULATION ---
+variance = 0.0
+if lpp > 0:
+    variance = ((curr_price - lpp) / lpp) * 100
+
+st.markdown(f"### Calculated Variance: **{variance:.2f}%**")
+
+if variance > 10:
+    st.error(f"⚠️ High Variance detected: {variance:.2f}%")
+elif variance > 0:
+    st.warning(f"Price Increase: {variance:.2f}%")
+else:
+    st.success("Price is stable or lower than LPP.")
+
+# --- 2. JUSTIFICATIONS (The Form Section) ---
+with st.form("justification_form"):
     st.subheader("2. Justifications & Recommendations")
     l1_just = st.text_area("Justification for selecting other than L1 (If applicable)")
     
@@ -73,22 +73,22 @@ with st.form("special_note_form"):
     oem_rec = st.text_area("Brand Specific & OEM Recommendation")
     urgency = st.text_area("Urgency Justification (Time constraints)")
 
-    # 3. Final Note
     st.subheader("3. Detailed Special Note")
     special_note_text = st.text_area("Final Summary (Max 500 Words)", height=200)
 
-    submitted = st.form_submit_button("Generate & Audit PDF")
+    submitted = st.form_submit_button("Finalize and Generate PDF")
 
 # --- POST-SUBMISSION LOGIC ---
 if submitted:
     pdf = SpecialNotePDF()
     pdf.add_page()
     
+    # Ensuring values are correctly pulled from session state for PDF capture
     pdf.section_header("I. Price & LPP Data")
     pdf.write_field("Currency", currency)
-    pdf.write_field("Last Purchase Price", f"{lpp:,.2f}")
-    pdf.write_field("LPP Date", f"{lpp_date}")
-    pdf.write_field("Current Price", f"{curr_price:,.2f}")
+    pdf.write_field("Last Purchase Price", f"{st.session_state.lpp_input:,.2f}")
+    pdf.write_field("LPP Date", f"{str(st.session_state.lpp_date_input)}")
+    pdf.write_field("Current Price", f"{st.session_state.curr_price_input:,.2f}")
     pdf.write_field("Price Variance", f"{variance:.2f}%")
     
     pdf.section_header("II. Selection Justifications")
@@ -103,14 +103,15 @@ if submitted:
     
     pdf.section_header("IV. Buyer's Special Note")
     pdf.set_font('Helvetica', '', 10)
-    pdf.multi_cell(0, 7, special_note_text)
+    pdf.multi_cell(0, 7, special_note_text if special_note_text else "No additional notes provided.")
 
-    pdf_output = pdf.output(dest='S').encode('latin-1')
+    # Generate buffer and handle character encoding
+    pdf_output = pdf.output(dest='S').encode('latin-1', 'replace')
     
-    st.success("✅ Form validated. Ready for Audit.")
+    st.success("✅ PDF Successfully Created.")
     st.download_button(
         label="📥 Download Special Note PDF",
         data=pdf_output,
-        file_name=f"Audit_Note_{date.today()}.pdf",
+        file_name=f"Procurement_Audit_{date.today()}.pdf",
         mime="application/pdf"
     )
